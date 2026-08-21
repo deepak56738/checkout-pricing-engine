@@ -18,99 +18,114 @@ def to_decimal(value: DecimalInput, *, field_name: str) -> Decimal:
     return number
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, init=False)
 class CartItem:
     """A purchasable cart line."""
 
     sku: str
-    unit_price: DecimalInput
+    unit_price: Decimal
     quantity: int
 
-    def __post_init__(self) -> None:
-        normalized_sku = self.sku.strip()
+    def __init__(self, sku: str, unit_price: DecimalInput, quantity: int) -> None:
+        normalized_sku = sku.strip()
         if not normalized_sku:
             raise ValueError("sku must not be empty")
-        if isinstance(self.quantity, bool) or not isinstance(self.quantity, int):
+        if isinstance(quantity, bool) or not isinstance(quantity, int):
             raise TypeError("quantity must be an integer")
-        if self.quantity <= 0:
+        if quantity <= 0:
             raise ValueError("quantity must be greater than zero")
 
-        price = to_decimal(self.unit_price, field_name="unit_price")
+        price = to_decimal(unit_price, field_name="unit_price")
         if price < 0:
             raise ValueError("unit_price must not be negative")
 
         object.__setattr__(self, "sku", normalized_sku)
         object.__setattr__(self, "unit_price", price)
+        object.__setattr__(self, "quantity", quantity)
 
     @property
     def line_total(self) -> Decimal:
         return self.unit_price * self.quantity
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, init=False)
 class PercentCoupon:
     """A percentage discount with optional eligibility and cap rules."""
 
     code: str
-    percent: DecimalInput
-    minimum_subtotal: DecimalInput = Decimal("0")
-    max_discount: DecimalInput | None = None
+    percent: Decimal
+    minimum_subtotal: Decimal
+    max_discount: Decimal | None
 
-    def __post_init__(self) -> None:
-        code = self.code.strip().upper()
-        if not code:
+    def __init__(
+        self,
+        code: str,
+        percent: DecimalInput,
+        minimum_subtotal: DecimalInput = Decimal("0"),
+        max_discount: DecimalInput | None = None,
+    ) -> None:
+        normalized_code = code.strip().upper()
+        if not normalized_code:
             raise ValueError("coupon code must not be empty")
 
-        percent = to_decimal(self.percent, field_name="percent")
-        minimum = to_decimal(self.minimum_subtotal, field_name="minimum_subtotal")
+        normalized_percent = to_decimal(percent, field_name="percent")
+        minimum = to_decimal(minimum_subtotal, field_name="minimum_subtotal")
         maximum = (
             None
-            if self.max_discount is None
-            else to_decimal(self.max_discount, field_name="max_discount")
+            if max_discount is None
+            else to_decimal(max_discount, field_name="max_discount")
         )
 
-        if not Decimal("0") < percent <= Decimal("100"):
+        if not Decimal("0") < normalized_percent <= Decimal("100"):
             raise ValueError("percent must be greater than 0 and at most 100")
         if minimum < 0:
             raise ValueError("minimum_subtotal must not be negative")
         if maximum is not None and maximum < 0:
             raise ValueError("max_discount must not be negative")
 
-        object.__setattr__(self, "code", code)
-        object.__setattr__(self, "percent", percent)
+        object.__setattr__(self, "code", normalized_code)
+        object.__setattr__(self, "percent", normalized_percent)
         object.__setattr__(self, "minimum_subtotal", minimum)
         object.__setattr__(self, "max_discount", maximum)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, init=False)
 class PricingPolicy:
     """Store-level tax and shipping rules."""
 
-    tax_rate: DecimalInput = Decimal("0")
-    shipping_fee: DecimalInput = Decimal("0")
-    free_shipping_threshold: DecimalInput | None = None
+    tax_rate: Decimal
+    shipping_fee: Decimal
+    free_shipping_threshold: Decimal | None
 
-    def __post_init__(self) -> None:
-        tax_rate = to_decimal(self.tax_rate, field_name="tax_rate")
-        shipping_fee = to_decimal(self.shipping_fee, field_name="shipping_fee")
+    def __init__(
+        self,
+        tax_rate: DecimalInput = Decimal("0"),
+        shipping_fee: DecimalInput = Decimal("0"),
+        free_shipping_threshold: DecimalInput | None = None,
+    ) -> None:
+        normalized_tax_rate = to_decimal(tax_rate, field_name="tax_rate")
+        normalized_shipping_fee = to_decimal(
+            shipping_fee,
+            field_name="shipping_fee",
+        )
         threshold = (
             None
-            if self.free_shipping_threshold is None
+            if free_shipping_threshold is None
             else to_decimal(
-                self.free_shipping_threshold,
+                free_shipping_threshold,
                 field_name="free_shipping_threshold",
             )
         )
 
-        if not Decimal("0") <= tax_rate <= Decimal("100"):
+        if not Decimal("0") <= normalized_tax_rate <= Decimal("100"):
             raise ValueError("tax_rate must be between 0 and 100")
-        if shipping_fee < 0:
+        if normalized_shipping_fee < 0:
             raise ValueError("shipping_fee must not be negative")
         if threshold is not None and threshold < 0:
             raise ValueError("free_shipping_threshold must not be negative")
 
-        object.__setattr__(self, "tax_rate", tax_rate)
-        object.__setattr__(self, "shipping_fee", shipping_fee)
+        object.__setattr__(self, "tax_rate", normalized_tax_rate)
+        object.__setattr__(self, "shipping_fee", normalized_shipping_fee)
         object.__setattr__(self, "free_shipping_threshold", threshold)
 
 
@@ -125,4 +140,3 @@ class CheckoutSummary:
     total: Decimal
     item_count: int
     applied_coupon: str | None
-
