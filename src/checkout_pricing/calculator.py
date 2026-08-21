@@ -1,7 +1,7 @@
 """Checkout total calculation."""
 
 from collections.abc import Iterable
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from checkout_pricing.models import (
     CartItem,
@@ -15,7 +15,7 @@ HUNDRED = Decimal("100")
 
 
 def _money(value: Decimal) -> Decimal:
-    return value.quantize(CENT)
+    return value.quantize(CENT, rounding=ROUND_HALF_UP)
 
 
 def calculate_checkout(
@@ -33,8 +33,10 @@ def calculate_checkout(
     discount = Decimal("0.00")
     applied_coupon: str | None = None
     if coupon is not None and subtotal >= coupon.minimum_subtotal:
-        discount = _money(subtotal * coupon.percent / HUNDRED)
-        discount = min(discount, subtotal)
+        calculated_discount = subtotal * coupon.percent / HUNDRED
+        if coupon.max_discount is not None:
+            calculated_discount = min(calculated_discount, coupon.max_discount)
+        discount = _money(min(calculated_discount, subtotal))
         applied_coupon = coupon.code
 
     discounted_subtotal = _money(subtotal - discount)
@@ -43,7 +45,7 @@ def calculate_checkout(
     if item_count:
         qualifies_for_free_shipping = (
             pricing_policy.free_shipping_threshold is not None
-            and discounted_subtotal >= pricing_policy.free_shipping_threshold
+            and subtotal >= pricing_policy.free_shipping_threshold
         )
         if not qualifies_for_free_shipping:
             shipping = _money(pricing_policy.shipping_fee)
@@ -60,4 +62,3 @@ def calculate_checkout(
         item_count=item_count,
         applied_coupon=applied_coupon,
     )
-
